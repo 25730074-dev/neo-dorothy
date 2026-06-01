@@ -1,0 +1,1004 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NEO-DOROTHY 2099 — 잃어버린 동기화</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@700;900&family=Noto+Sans+KR:wght@300;400;700&display=swap');
+
+:root {
+  --bg:     #080b0f;
+  --panel:  rgba(10,13,18,0.97);
+  --green:  #00FF66;
+  --red:    #FF003C;
+  --amber:  #F39C12;
+  --cyan:   #3498DB;
+  --purple: #bf5fff;
+  --txt:    #c8c8c0;
+  --txt-dim:#525250;
+  --mono:   'Share Tech Mono','Courier New',monospace;
+  --orb:    'Orbitron',sans-serif;
+  --body:   'Noto Sans KR',sans-serif;
+  --hdr-h:  62px;
+}
+
+*, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+html, body { height:100%; overflow:hidden; background:var(--bg); color:var(--txt); font-family:var(--body); -webkit-font-smoothing:antialiased; user-select:none; }
+
+/* ── HUD ── */
+#hud {
+  height: var(--hdr-h); display:flex; align-items:center;
+  padding:0 22px; gap:20px;
+  background: rgba(6,8,12,0.98);
+  border-bottom: 2px solid rgba(255,0,60,0.5);
+  position:relative; z-index:100; flex-shrink:0;
+  transition: border-bottom-color .4s;
+}
+.core-active #hud { border-bottom-color:rgba(191,95,255,.55); }
+
+#hud-logo {
+  border:2px solid var(--red); padding:7px 16px;
+  font-family:var(--orb); font-size:13px; font-weight:700;
+  color:var(--amber); letter-spacing:3px; white-space:nowrap;
+  text-shadow:0 0 10px rgba(243,156,18,.45); flex-shrink:0;
+  animation:logoGlitch 8s ease-in-out infinite;
+}
+@keyframes logoGlitch {
+  0%,85%,100%{transform:none;filter:none;}
+  86%{transform:translateX(-3px);filter:hue-rotate(90deg);}
+  87%{transform:translateX(2px);}
+  88%{transform:none;filter:none;}
+  92%{transform:translateX(1px);filter:brightness(1.5);}
+  93%{transform:none;filter:none;}
+}
+.hud-div { width:1px; height:36px; background:rgba(255,255,255,.07); flex-shrink:0; }
+
+#hud-center { display:flex; gap:30px; align-items:center; flex:1; justify-content:center; }
+.hud-stat { display:flex; flex-direction:column; align-items:center; gap:4px; min-width:80px; }
+.hstat-lbl { font-family:var(--mono); font-size:8px; letter-spacing:3px; }
+.hstat-num { font-family:var(--orb); font-size:22px; font-weight:700; line-height:1; }
+.hstat-bar { width:100%; height:2px; background:rgba(255,255,255,.05); }
+.hstat-fill { height:100%; width:0%; transition:width .7s cubic-bezier(.25,.46,.45,.94); }
+
+.h-sync .hstat-lbl,.h-sync .hstat-num { color:var(--green); }
+.h-sync .hstat-fill { background:var(--green); box-shadow:0 0 6px var(--green); }
+.h-integ .hstat-lbl,.h-integ .hstat-num { color:var(--green); }
+.h-integ .hstat-fill { background:var(--green); box-shadow:0 0 6px var(--green); }
+.h-noise .hstat-lbl,.h-noise .hstat-num { color:var(--green); }
+.h-noise .hstat-fill { background:var(--green); box-shadow:0 0 6px var(--green); }
+
+.noise-danger .h-noise .hstat-num { color:var(--red)!important; text-shadow:0 0 12px var(--red)!important; animation:numBlink .6s steps(1) infinite; }
+.noise-danger .h-noise .hstat-fill { background:var(--red)!important; box-shadow:0 0 8px var(--red)!important; animation:barBlink .6s steps(1) infinite; }
+@keyframes numBlink { 0%,49%{opacity:1;} 50%,100%{opacity:.2;} }
+@keyframes barBlink { 0%,49%{opacity:1;} 50%,100%{opacity:.25;} }
+
+@keyframes statPulse { 0%,100%{filter:brightness(1);} 40%{filter:brightness(3.5) drop-shadow(0 0 8px currentColor);} }
+.pulsing { animation:statPulse .55s ease; }
+
+#admin-box {
+  border:1px solid rgba(191,95,255,.35); padding:8px 16px;
+  font-family:var(--mono); font-size:11px; letter-spacing:2px;
+  white-space:nowrap; flex-shrink:0;
+  display:flex; align-items:center; gap:6px;
+}
+.adm-lbl { color:var(--txt-dim); }
+#adm-val { color:var(--txt-dim); }
+#adm-val.adm-on { color:var(--red); animation:admBlink .6s steps(1) infinite; }
+@keyframes admBlink { 0%,49%{opacity:1;} 50%,100%{opacity:.15;} }
+
+/* ── MAIN 2단 ── */
+#main {
+  height: calc(100vh - var(--hdr-h));
+  display:flex; overflow:hidden;
+}
+
+/* ════ 좌측: 이미지 패널 ════ */
+#img-panel {
+  flex: 0 0 52%;
+  position:relative; overflow:hidden;
+  background:#000;
+}
+
+#bg-a, #bg-b {
+  position:absolute; inset:0; z-index:0;
+  background-color:#000;
+  background-size:cover;
+  background-position:center center;
+  background-repeat:no-repeat;
+  transition:opacity 1.3s ease;
+}
+#bg-b { opacity:0; }
+
+#scene-overlay {
+  position:absolute; inset:0; z-index:1; pointer-events:none;
+  transition:background 1.2s ease, opacity 1.2s ease;
+}
+
+#scanlines {
+  position:absolute; inset:0; z-index:2; pointer-events:none;
+  background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,.13) 2px,rgba(0,0,0,.13) 4px);
+  animation:scanFlow 10s linear infinite;
+}
+@keyframes scanFlow { from{background-position:0 0;} to{background-position:0 200px;} }
+
+#smog {
+  position:absolute; inset:0; z-index:3; pointer-events:none;
+  background:
+    radial-gradient(ellipse at center,transparent 25%,rgba(8,11,15,.5) 100%),
+    linear-gradient(90deg,rgba(8,11,15,.08) 0%,transparent 20%,transparent 80%,rgba(8,11,15,.15) 100%);
+}
+
+#glitch-layer {
+  position:absolute; inset:0; z-index:4; pointer-events:none;
+  opacity:0; transition:opacity .3s;
+}
+.noise-high #glitch-layer { opacity:1; animation:glitchFx .4s steps(3) infinite; }
+@keyframes glitchFx {
+  0%  {clip-path:inset(4% 0 88% 0); transform:translate(-5px,0); background:rgba(255,0,60,.08);}
+  25% {clip-path:inset(60% 0 6% 0); transform:translate(5px,0);  background:rgba(0,255,102,.05);}
+  50% {clip-path:inset(28% 0 50% 0);transform:translate(-3px,2px);background:rgba(52,152,219,.05);}
+  75% {clip-path:inset(76% 0 3% 0); transform:translate(3px,-2px);background:rgba(255,0,60,.09);}
+  100%{clip-path:inset(4% 0 88% 0); transform:translate(0,0);  background:transparent;}
+}
+
+#danger {
+  position:absolute; inset:0; z-index:5; pointer-events:none;
+  background:rgba(255,0,60,.07); opacity:0;
+}
+.noise-danger #danger { animation:dangerPulse 1.3s ease-in-out infinite; }
+@keyframes dangerPulse { 0%,100%{opacity:0;} 50%{opacity:1;} }
+
+.noise-danger #img-panel { animation:rgbSplit 3.5s ease-in-out infinite; }
+@keyframes rgbSplit {
+  0%,78%,100%{filter:none;}
+  79%{filter:drop-shadow(4px 0 var(--red)) drop-shadow(-4px 0 var(--cyan));}
+  80%{filter:none;}
+  85%{filter:drop-shadow(-3px 0 var(--red)) drop-shadow(3px 0 var(--cyan)) brightness(1.07);}
+  86%{filter:none;}
+}
+
+.bc {
+  position:absolute; z-index:6; pointer-events:none;
+  font-family:var(--mono); font-size:5px;
+  color:rgba(0,255,102,.07); line-height:1.4; white-space:pre;
+}
+#bc-tl {top:10px;left:10px;}
+#bc-bl {bottom:10px;left:10px;}
+
+#timer-ring {
+  position:absolute; bottom:18px; right:18px; z-index:7;
+  width:52px; height:52px;
+  display:flex; align-items:center; justify-content:center;
+}
+#timer-ring svg {
+  position:absolute; top:0; left:0; width:100%; height:100%;
+  transform:rotate(-90deg);
+}
+#timer-num {
+  font-family:var(--mono); font-size:15px; font-weight:bold;
+  color:var(--red); text-shadow:0 0 12px var(--red);
+  position:relative; z-index:1;
+}
+.timer-warn #timer-ring { animation:ringBlink .45s steps(1) infinite; }
+@keyframes ringBlink { 0%,49%{opacity:1;} 50%,100%{opacity:.2;} }
+
+/* ════ 우측: 정보 패널 ════ */
+#info-panel {
+  flex:1; background:var(--panel);
+  border-left:1px solid rgba(255,255,255,.055);
+  display:flex; flex-direction:column;
+  padding:24px 26px 18px; gap:0;
+  overflow:hidden; position:relative; z-index:10;
+}
+
+#scene-title {
+  font-family:var(--mono); font-size:clamp(17px,2vw,24px);
+  font-weight:bold; color:var(--amber);
+  letter-spacing:1px; line-height:1.25;
+  padding-bottom:10px;
+  border-bottom:1px solid rgba(243,156,18,.28);
+  margin-bottom:9px; flex-shrink:0;
+  animation:neonFlicker 11s ease-in-out infinite;
+}
+@keyframes neonFlicker {
+  0%,70%,72%,75%,100%{opacity:1;text-shadow:0 0 8px rgba(243,156,18,.4);}
+  71%{opacity:.55;text-shadow:none;}
+  73%,74%{opacity:.38;}
+}
+
+#scene-tag {
+  font-family:var(--mono); font-size:11px;
+  color:rgba(255,255,255,.3); letter-spacing:3px;
+  margin-bottom:11px; flex-shrink:0; text-transform:uppercase;
+}
+
+#ui-narr {
+  font-size:14px; color:var(--txt-dim);
+  line-height:1.7; font-style:italic; letter-spacing:.3px;
+  margin-bottom:13px; flex-shrink:0;
+  display:-webkit-box; -webkit-line-clamp:2;
+  -webkit-box-orient:vertical; overflow:hidden;
+}
+
+#dialog-block {
+  flex:1; display:flex; flex-direction:column;
+  min-height:0; border-left:3px solid var(--purple);
+  padding:2px 0 2px 15px; margin-bottom:14px;
+  overflow:hidden; cursor:pointer; position:relative;
+}
+#char-name {
+  font-family:var(--mono); font-size:15px; font-weight:bold;
+  margin-bottom:8px; flex-shrink:0; letter-spacing:1px;
+}
+.cn-normal { color:var(--green); }
+.cn-red    { color:var(--red); }
+.cn-purple { color:var(--purple); }
+.cn-dim    { color:var(--txt-dim); font-size:12px; letter-spacing:3px; }
+
+.dialog-scroll {
+  flex:1; overflow-y:auto;
+  scrollbar-width:thin; scrollbar-color:rgba(191,95,255,.2) transparent;
+}
+.dialog-scroll::-webkit-scrollbar { width:3px; }
+.dialog-scroll::-webkit-scrollbar-thumb { background:rgba(191,95,255,.2); }
+
+/* =========================================
+   대사 & 강조 스타일 상향 조정
+========================================= */
+#dialog-text {
+  font-size:18px; line-height:1.75; color:#E0E0E0;
+  font-weight:400; letter-spacing:.4px; white-space:pre-wrap; word-break:keep-all;
+}
+.hl-green  { color: var(--green); font-weight: 700; text-shadow: 0 0 5px rgba(0,255,102,0.4); }
+.hl-red    { color: var(--red); font-weight: 700; text-shadow: 0 0 5px rgba(255,0,60,0.4); }
+.hl-amber  { color: var(--amber); font-weight: 700; text-shadow: 0 0 5px rgba(243,156,18,0.4); }
+.hl-cyan   { color: var(--cyan); font-weight: 700; text-shadow: 0 0 5px rgba(52,152,219,0.4); }
+.hl-purple { color: var(--purple); font-weight: 700; text-shadow: 0 0 5px rgba(191,95,255,0.4); }
+
+#cursor {
+  display:inline-block; width:8px; height:18px;
+  background:var(--green); animation:cursorBlink .65s steps(1) infinite;
+  vertical-align:middle; margin-left:3px;
+}
+@keyframes cursorBlink { 0%,49%{opacity:1;} 50%,100%{opacity:0;} }
+
+/* 안내 텍스트 가시성 향상 */
+#skip-hint { font-family:var(--mono); font-size:11px; color:var(--txt-dim); margin-top:8px; flex-shrink:0; }
+#cont-hint { 
+  display:none; font-family:var(--body); font-size:14px; font-weight:bold; color:var(--green); 
+  margin-top:10px; flex-shrink:0; animation:hintBounce .9s ease-in-out infinite; 
+  text-shadow: 0 0 8px rgba(0,255,102,0.4); letter-spacing: 1px;
+}
+@keyframes hintBounce { 0%,100%{transform:translateY(0);} 50%{transform:translateY(-3px);} }
+
+.hr { height:1px; background:rgba(255,255,255,.06); margin-bottom:12px; flex-shrink:0; }
+
+.ctrl-row { display:flex; gap:8px; margin-bottom:10px; flex-shrink:0; }
+.ctrl-btn {
+  font-family:var(--mono); font-size:10px; letter-spacing:2px;
+  padding:8px 10px; background:transparent;
+  color:var(--txt-dim); border:1px solid rgba(255,255,255,.09);
+  cursor:pointer; transition:all .2s; flex:1; text-transform:uppercase;
+}
+.ctrl-btn:hover { color:var(--green); border-color:rgba(0,255,102,.3); background:rgba(0,255,102,.04); }
+.ctrl-btn:disabled { opacity:.18; cursor:not-allowed; pointer-events:none; }
+#btn-skip { color:var(--green); border-color:rgba(0,255,102,.2); }
+
+#choices-wrap {
+  display:grid; grid-template-columns:1fr 1fr; gap:10px; flex-shrink:0;
+}
+#choices-wrap.single { grid-template-columns:1fr; }
+
+.choice-card {
+  background:rgba(10,13,18,.92);
+  border:1px solid rgba(255,255,255,.09); border-radius:6px;
+  padding:14px 14px 12px;
+  cursor:pointer; transition:all .22s;
+  display:flex; flex-direction:column; align-items:center; gap:7px;
+  text-align:center; position:relative; overflow:hidden;
+}
+.choice-card::before {
+  content:''; position:absolute; inset:0; opacity:0; transition:opacity .25s;
+}
+.choice-card:hover::before { opacity:1; }
+.choice-card:active { transform:scale(.985); }
+
+.type-warm   { border-color:rgba(243,156,18,.28); }
+.type-warm::before   { background:radial-gradient(ellipse at center,rgba(243,156,18,.08),transparent 70%); }
+.type-warm:hover     { border-color:rgba(243,156,18,.6); box-shadow:0 0 18px rgba(243,156,18,.15); }
+.type-cold   { border-color:rgba(52,152,219,.28); }
+.type-cold::before   { background:radial-gradient(ellipse at center,rgba(52,152,219,.08),transparent 70%); }
+.type-cold:hover     { border-color:rgba(52,152,219,.6); box-shadow:0 0 18px rgba(52,152,219,.15); }
+.type-dark   { border-color:rgba(255,0,60,.28); }
+.type-dark::before   { background:radial-gradient(ellipse at center,rgba(255,0,60,.08),transparent 70%); }
+.type-dark:hover     { border-color:rgba(255,0,60,.6); box-shadow:0 0 18px rgba(255,0,60,.15); }
+.type-neutral{ border-color:rgba(0,255,102,.22); }
+.type-neutral::before{ background:radial-gradient(ellipse at center,rgba(0,255,102,.07),transparent 70%); }
+.type-neutral:hover  { border-color:rgba(0,255,102,.6); box-shadow:0 0 18px rgba(0,255,102,.12); }
+
+.c-badge {
+  width:24px; height:24px; border-radius:50%;
+  font-family:var(--mono); font-size:11px; font-weight:bold;
+  display:flex; align-items:center; justify-content:center;
+}
+.type-warm   .c-badge { background:var(--amber);  color:#000; }
+.type-cold   .c-badge { background:var(--cyan);   color:#000; }
+.type-dark   .c-badge { background:var(--red);    color:#fff; }
+.type-neutral.c-badge,
+.type-neutral .c-badge{ background:var(--green);  color:#000; }
+
+.c-title { font-size:14px; font-weight:700; line-height:1.35; color:#fff; letter-spacing:.2px; }
+.c-effects { display:flex; gap:4px; flex-wrap:wrap; justify-content:center; }
+.eff-pill {
+  font-family:var(--mono); font-size:9px; padding:2px 6px;
+  border-radius:10px; border:1px solid; letter-spacing:1px;
+}
+.ep-warm { color:var(--amber); border-color:rgba(243,156,18,.4); background:rgba(243,156,18,.08); }
+.ep-cold { color:var(--cyan);  border-color:rgba(52,152,219,.4); background:rgba(52,152,219,.08); }
+.ep-dark { color:var(--red);   border-color:rgba(255,0,60,.4);   background:rgba(255,0,60,.08);   }
+.ep-heal { color:var(--green); border-color:rgba(0,255,102,.4);  background:rgba(0,255,102,.08);  }
+.ep-flag { color:var(--purple);border-color:rgba(191,95,255,.4); background:rgba(191,95,255,.08); }
+
+.choice-card.disabled { opacity:.16; cursor:not-allowed; pointer-events:none; }
+
+#trans { position:fixed; inset:0; z-index:500; background:var(--bg); opacity:0; pointer-events:none; }
+.transitioning #trans { animation:transAnim .85s ease forwards; }
+@keyframes transAnim { 0%{opacity:0;} 25%{opacity:1;} 75%{opacity:1;} 100%{opacity:0;} }
+@keyframes shake {
+  0%{transform:translate(0,0);} 15%{transform:translate(-3px,1px);} 30%{transform:translate(3px,-2px);}
+  50%{transform:translate(-2px,2px);} 70%{transform:translate(2px,-1px);} 85%{transform:translate(-1px,1px);}
+  100%{transform:translate(0,0);}
+}
+.shaking { animation:shake .35s ease !important; }
+
+#title-screen {
+  position:fixed; inset:0; z-index:900; background:var(--bg);
+  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px;
+}
+.t-logo {
+  font-family:var(--orb); font-weight:900; font-size:clamp(30px,5.5vw,56px);
+  letter-spacing:10px; color:var(--green);
+  text-shadow:0 0 28px var(--green),0 0 70px rgba(0,255,102,.2);
+  text-align:center; line-height:1.05; animation:tGlow 3s ease-in-out infinite;
+}
+@keyframes tGlow {
+  0%,100%{text-shadow:0 0 28px var(--green),0 0 60px rgba(0,255,102,.18);}
+  50%{text-shadow:0 0 44px var(--green),0 0 110px rgba(0,255,102,.35);}
+}
+.t-sub  { font-family:var(--mono); font-size:10px; color:rgba(0,255,102,.3); letter-spacing:5px; text-align:center; }
+.t-year { font-family:var(--mono); font-size:12px; color:rgba(255,255,255,.07); letter-spacing:12px; }
+#boot-log { font-family:var(--mono); font-size:9px; color:rgba(0,255,102,.42); letter-spacing:1px; margin-top:16px; width:320px; max-width:92vw; height:68px; overflow:hidden; line-height:2; }
+#start-btn {
+  margin-top:16px; font-family:var(--mono); font-size:11px; letter-spacing:4px;
+  padding:13px 38px; background:transparent; border:1px solid var(--green);
+  color:var(--green); cursor:pointer; transition:all .25s; text-transform:uppercase;
+  animation:btnPulse 2.2s ease-in-out infinite;
+}
+@keyframes btnPulse { 0%,100%{box-shadow:0 0 8px rgba(0,255,102,.2);} 50%{box-shadow:0 0 28px rgba(0,255,102,.5);} }
+#start-btn:hover { background:rgba(0,255,102,.08); box-shadow:0 0 44px rgba(0,255,102,.5); }
+.t-ver { position:fixed; bottom:12px; font-family:var(--mono); font-size:7px; color:rgba(0,255,102,.1); letter-spacing:3px; }
+
+#ending { position:fixed; inset:0; z-index:800; background:var(--bg); display:none; flex-direction:column; align-items:center; justify-content:center; gap:14px; padding:40px; }
+#ending.active { display:flex; }
+.end-label   { font-family:var(--mono); font-size:9px; letter-spacing:5px; color:var(--txt-dim); text-transform:uppercase; }
+.end-title   { font-family:var(--orb); font-size:clamp(22px,4vw,38px); font-weight:900; letter-spacing:6px; text-align:center; margin-top:4px; }
+.end-summary { font-family:var(--body); font-size:13px; line-height:2; color:var(--txt-dim); text-align:center; max-width:540px; font-weight:300; white-space:pre-wrap; margin-top:10px; }
+.end-stats   { font-family:var(--mono); font-size:9px; color:rgba(255,255,255,.1); margin-top:16px; line-height:2; text-align:center; border-top:1px solid rgba(255,255,255,.05); padding-top:14px; }
+#restart-btn { margin-top:20px; font-family:var(--mono); font-size:10px; letter-spacing:3px; padding:12px 32px; background:transparent; border:1px solid var(--green); color:var(--green); cursor:pointer; transition:all .22s; }
+#restart-btn:hover { background:rgba(0,255,102,.08); box-shadow:0 0 22px rgba(0,255,102,.32); }
+
+@media (max-height:700px) {
+  :root{--hdr-h:52px;} .hstat-num{font-size:18px;} #scene-title{font-size:15px;} 
+  #dialog-text{font-size:15px;line-height:1.7;} #cont-hint{font-size:12px;}
+}
+</style>
+</head>
+<body>
+
+<div id="title-screen">
+  <div class="t-logo">NEO-DOROTHY<br>2099</div>
+  <div class="t-sub">잃어버린 동기화 // LOST SYNC</div>
+  <div class="t-year">— 2099 —</div>
+  <div id="boot-log"></div>
+  <button id="start-btn" onclick="bootGame()">▶ SYSTEM BOOT</button>
+  <div class="t-ver">VER.2099.04.17 // BUILD_NEO_1.0.0 // NODE_KANSAS_ALPHA</div>
+</div>
+
+<div id="trans"></div>
+
+<div id="ending">
+  <div class="end-label" id="end-label">SYSTEM LOG</div>
+  <div class="end-title" id="end-title"></div>
+  <div class="end-summary" id="end-summary"></div>
+  <div class="end-stats"  id="end-stats"></div>
+  <button id="restart-btn" onclick="restartGame()">▶ RESTART SYSTEM</button>
+</div>
+
+<header id="hud">
+  <div id="hud-logo">NEO-DOROTHY 2099</div>
+  <div class="hud-div"></div>
+  <div id="hud-center">
+    <div class="hud-stat h-sync">
+      <div class="hstat-lbl">SYNC</div>
+      <div class="hstat-num" id="num-sync">0</div>
+      <div class="hstat-bar"><div class="hstat-fill" id="fill-sync"></div></div>
+    </div>
+    <div class="hud-stat h-integ">
+      <div class="hstat-lbl">INTEG</div>
+      <div class="hstat-num" id="num-integ">0</div>
+      <div class="hstat-bar"><div class="hstat-fill" id="fill-integ"></div></div>
+    </div>
+    <div class="hud-stat h-noise">
+      <div class="hstat-lbl">NOISE</div>
+      <div class="hstat-num" id="num-noise">0</div>
+      <div class="hstat-bar"><div class="hstat-fill" id="fill-noise"></div></div>
+    </div>
+  </div>
+  <div class="hud-div"></div>
+  <div id="admin-box">
+    <span class="adm-lbl">ADMIN_KEY:</span>
+    <span id="adm-val">FALSE</span>
+  </div>
+</header>
+
+<div id="main">
+  <div id="img-panel">
+    <div id="bg-a"></div>
+    <div id="bg-b"></div>
+    <div id="scene-overlay"></div>
+    <div id="scanlines"></div>
+    <div id="smog"></div>
+    <div id="glitch-layer"></div>
+    <div id="danger"></div>
+    <div class="bc" id="bc-tl"></div>
+    <div class="bc" id="bc-bl"></div>
+    
+    <div id="timer-ring">
+      <svg viewBox="0 0 52 52">
+        <circle cx="26" cy="26" r="22" fill="none" stroke="rgba(255,0,60,.2)" stroke-width="2.5"/>
+        <circle id="timer-arc" cx="26" cy="26" r="22" fill="none"
+                stroke="#FF003C" stroke-width="2.5"
+                stroke-dasharray="138" stroke-dashoffset="0"
+                stroke-linecap="round"/>
+      </svg>
+      <div id="timer-num">08</div>
+    </div>
+  </div>
+
+  <div id="info-panel">
+    <div id="scene-title">—</div>
+    <div id="scene-tag">STANDBY</div>
+    <div id="ui-narr">시스템 대기 중...</div>
+
+    <div id="dialog-block" onclick="onDialogClick()">
+      <div id="char-name" class="cn-dim">[ NARRATION ]</div>
+      <div class="dialog-scroll" id="dialog-scroll">
+        <div id="dialog-text"></div>
+        <span id="cursor"></span>
+      </div>
+      <div id="skip-hint">[ SPACE / CLICK — 스킵 ]</div>
+      <div id="cont-hint">▶ 선택지를 고르세요 ◀</div>
+    </div>
+
+    <div class="hr"></div>
+    <div class="ctrl-row">
+      <button class="ctrl-btn" id="btn-back" onclick="goBack()">← BACK</button>
+      <button class="ctrl-btn" id="btn-skip" onclick="onSkipClick()">SKIP ▶</button>
+    </div>
+    <div id="choices-wrap"></div>
+  </div>
+</div>
+
+<script>
+// ================================================================
+// NEO-DOROTHY 2099 — 시각적 효과 하이라이트 + 타이핑 엔진 개선본
+// ================================================================
+
+const state = {
+  currentScene:'S1', WARM:0, COLD:0, GLITCH:0,
+  flags:{ scarecrow_friend:false, tin_friend:false, lion_friend:false, from_alt:false, WITCH_CORE:false }
+};
+const sceneHistory = [];
+const snap = () => ({ WARM:state.WARM, COLD:state.COLD, GLITCH:state.GLITCH, flags:{...state.flags} });
+
+/* ── 씬 데이터 (하이라이트 태그 삽입) ── */
+const sceneData = {
+  'S1':{
+    img:'https://images.unsplash.com/photo-1518770660439-4636190af475?w=1400&q=90&fit=crop',
+    overlay:'linear-gradient(160deg,rgba(0,40,20,.38)0%,rgba(8,11,15,.55)100%)',
+    tint:'rgba(0,255,102,.06)',
+    title:'S1 — 데이터 폭풍 속으로',
+    tag:'PHASE 1  ·  KANSAS DATA TORNADO',
+    narr:'회색빛 캔자스 서버. 거대한 데이터 토네이도가 화면을 집어삼키듯 휘몰아친다.',
+    char:null,
+    text:()=>`<span class="hl-red">시스템 붕괴.</span>\n당신의 의식이 데이터의 바다로 흩어집니다.\n\n캔자스로 돌아가려면 <span class="hl-green">에메랄드 성</span>을 찾아야 합니다.`,
+    choices:[
+      {text:'눈을 감고\n흐름에 맡긴다', type:'warm',icon:'♡',effects:{WARM:10},next:'S2'},
+      {text:'폭풍의 눈을\n똑바로 본다', type:'cold',icon:'⊙',effects:{COLD:10},next:'S2'}
+    ]
+  },
+  'S2':{
+    img:'https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=1400&q=90&fit=crop',
+    overlay:'linear-gradient(160deg,rgba(0,30,15,.35)0%,rgba(8,11,15,.55)100%)',
+    tint:'rgba(0,255,100,.07)',
+    title:'S2 — 노란 회로의 길',
+    tag:'PHASE 1  ·  YELLOW CIRCUIT ROAD',
+    narr:'끊어진 노란색 회로망 위. 낡아서 지혜 모듈이 타버린 허수아비 봇이 매달려 있다.',
+    char:'허수아비 봇', charType:'normal',
+    text:(s)=>s.COLD > s.WARM
+      ?`끊어진 회로망 위, 허수아비의 모니터 얼굴에 노이즈가 발생합니다.\n\n<span class="hl-amber">[NOISE INTERFERENCE DETECTED]</span>\n\n"내 머릿속엔 <span class="hl-amber">쓰레기 데이터</span>뿐이야...\n네 안의 무언가로 날 채워줄 수 있어?"`
+      :`"내 머릿속엔 <span class="hl-amber">쓰레기 데이터</span>뿐이야...\n네 안의 무언가로 날 채워줄 수 있어?"`,
+    choices:[
+      {text:'따뜻한 기억\n데이터 나눔',  type:'warm',icon:'♡',effects:{WARM:20},flags:{scarecrow_friend:true},next:'S3'},
+      {text:'차가운 논리\n코드 복사', type:'cold',icon:'⊙',effects:{COLD:20},next:'S3'}
+    ]
+  },
+  'S3':{
+    img:'https://images.unsplash.com/photo-1581090464777-f3220bbe1b8b?w=1400&q=90&fit=crop',
+    overlay:'linear-gradient(160deg,rgba(30,18,6,.38)0%,rgba(8,11,15,.55)100%)',
+    tint:'rgba(180,80,0,.06)',
+    title:'S3 — 녹슨 강철의 숲',
+    tag:'PHASE 1  ·  RUSTY STEEL FOREST',
+    narr:'멈춰버린 유압 공장. 하트 슬롯이 비어있는 양철 사이보그 조우.',
+    char:'양철 사이보그', charType:'normal',
+    text:(s)=>s.WARM > s.COLD && s.flags.scarecrow_friend
+      ?`허수아비가 먼저 다가가 위로의 제스처를 취합니다.\n\n"감정 에뮬레이션 실패.\n내게 뜨거운 <span class="hl-red">'고동'</span>을 줄 수 있는가? 아니라면 <span class="hl-red">전투 모드</span>로 전환하겠다."`
+      :`멈춰버린 유압 공장. 양철 사이보그가 당신을 가로막습니다.\n\n"감정 에뮬레이션 실패.\n내게 뜨거운 <span class="hl-red">'고동'</span>을 줄 수 있는가? 아니라면 <span class="hl-red">전투 모드</span>로 전환하겠다."`,
+    choices:[
+      {text:'뛰는 심장(공감)\n연결', type:'warm',icon:'♡',effects:{WARM:20},flags:{tin_friend:true},next:'S4'},
+      {text:'전투용 태엽\n강제 회전', type:'dark',icon:'⚡',effects:{COLD:20,GLITCH:10},next:'S4'}
+    ]
+  },
+  'S4':{
+    img:'https://images.unsplash.com/photo-1515630278258-407f66498911?w=1400&q=90&fit=crop',
+    overlay:'linear-gradient(160deg,rgba(8,6,20,.38)0%,rgba(8,11,15,.55)100%)',
+    tint:'rgba(100,0,180,.05)',
+    title:'S4 — 두려움의 방화벽',
+    tag:'PHASE 1  ·  FEAR FIREWALL GATE',
+    narr:'거대한 톨게이트. 덩치는 산만 하지만 미세한 에러에도 벌벌 떠는 사자 백신.',
+    char:'사자 백신', charType:'normal',
+    text:(s)=>s.WARM > s.COLD
+      ?`당신의 따뜻한 기운 때문인지,\n사자 주변의 위협적인 붉은 경고등이 <span class="hl-green">노란색으로 안정화</span>됩니다.\n\n"크르릉... 난 백신인데, <span class="hl-red">오류</span>가 너무 무서워!\n제발 내게 다가오지 마!"`
+      :`거대한 톨게이트. 사자 백신이 접근을 경계합니다.\n\n"크르릉... 난 백신인데, <span class="hl-red">오류</span>가 너무 무서워!\n제발 내게 다가오지 마!"`,
+    choices:[
+      {text:'손을 잡고\n함께 격려',     type:'warm',icon:'♡',effects:{WARM:20},flags:{lion_friend:true},next:'S5'},
+      {text:'두려움 코드\n강제 삭제', type:'dark',icon:'⚡',effects:{COLD:20,GLITCH:10},next:'S5'}
+    ]
+  },
+  'S5':{
+    img:'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=1400&q=90&fit=crop',
+    overlay:'linear-gradient(160deg,rgba(30,4,4,.40)0%,rgba(8,11,15,.55)100%)',
+    tint:'rgba(255,0,51,.09)',
+    title:'S5 — 서쪽 마녀의 그림자',
+    tag:'PHASE 2  ·  WEST_WITCH.EXE AMBUSH',
+    narr:'에메랄드로 가는 길목이 붉게 오염됨. 바이러스 군단 W.I.T.C.H 기습.',
+    char:'서쪽 마녀', charType:'red',
+    text:(s)=>s.WARM > s.COLD
+      ?`동료들이 스스로 당신을 가로막으며 <span class="hl-cyan">방어 진형</span>을 구축합니다.\n\n"<span class="hl-red">어딜 감히 에메랄드 성을 넘봐?</span>\n네 따뜻한 <span class="hl-cyan">영혼 코드</span>를 이리 내놔라!"`
+      :`홀로 바이러스 군단과 마주합니다.\n\n"<span class="hl-red">어딜 감히 에메랄드 성을 넘봐?</span>\n네 따뜻한 <span class="hl-cyan">영혼 코드</span>를 이리 내놔라!"`,
+    choices:[
+      {text:'동료와 서로 지키며\n방어',   type:'warm',icon:'♡',effects:{WARM:30},next:'S6'},
+      {text:'마녀의 글리치\n역이용', type:'dark',icon:'⚡',effects:{COLD:20,GLITCH:30},next:'S6_ALT'}
+    ]
+  },
+  'S6_ALT':{
+    img:'https://images.unsplash.com/photo-1519681393784-d120267933ba?w=1400&q=90&fit=crop',
+    overlay:'linear-gradient(160deg,rgba(10,0,22,.45)0%,rgba(8,11,15,.60)100%)',
+    tint:'rgba(140,0,220,.08)',
+    title:'S6_ALT — 어두운 숲의 유혹',
+    tag:'PHASE 2  ·  DARK FOREST LOOP',
+    narr:'마녀의 힘을 빨아들여 도착한 기하학적이고 어두운 숲. 마녀의 코어가 요동침.',
+    char:null,
+    text:(s)=>s.GLITCH >= 100 
+      ?`데이터 외형이 완전히 <span class="hl-red">붉게 타락</span>했습니다.\n더 이상 돌아갈 곳은 없습니다.\n\n"이 <span class="hl-purple">강력한 힘</span>... 내가 통제할 수 있을 것 같아.\n하지만 곁에 있는 친구들은 날 <span class="hl-red">괴물</span>로 보겠지."`
+      :`당신의 데이터 외형이 점차 <span class="hl-red">붉게 타락</span>하고 있습니다.\n\n"이 <span class="hl-purple">강력한 힘</span>... 내가 통제할 수 있을 것 같아.\n하지만 곁에 있는 친구들은 날 <span class="hl-red">괴물</span>로 보겠지."`,
+    choices:[
+      {text:'유혹을 뿌리치고\n돌아감',  type:'warm',icon:'♡',condition:(s)=>s.GLITCH<100, disabledText:'GLITCH 100 이상 — 돌아갈 수 없음', effects:{WARM:10,GLITCH:-20},flags:{from_alt:true},next:'S6'},
+      {text:'마녀의 코어\n완전히 흡수', type:'dark',icon:'⚡',effects:{COLD:50,GLITCH:100},flags:{WITCH_CORE:true},next:'S7'}
+    ]
+  },
+  'S6':{
+    img:'https://images.unsplash.com/photo-1480714378408-67cf0d13bc1b?w=1400&q=90&fit=crop',
+    overlay:'linear-gradient(160deg,rgba(0,28,12,.35)0%,rgba(8,11,15,.52)100%)',
+    tint:'rgba(0,220,90,.07)',
+    title:'S6 — 에메랄드 성의 문',
+    tag:'PHASE 2  ·  EMERALD CITY GATE',
+    narr:'눈부신 녹색 코드의 거대한 문. 원칙주의자 문지기 프로그램이 길을 막음.',
+    char:'문지기', charType:'normal',
+    text:(s)=>s.flags.from_alt
+      ?`당신의 외형이 상처 입었으나 <span class="hl-green">안정적인 빛</span>을 내고 있습니다.\n\n"마녀를 해치웠다는 증명(<span class="hl-amber">빗자루</span>) 없이는\n<span class="hl-green">위대한 오즈</span>를 알현할 수 없다."`
+      :`눈부신 녹색 코드의 거대한 문.\n\n"마녀를 해치웠다는 증명(<span class="hl-amber">빗자루</span>) 없이는\n<span class="hl-green">위대한 오즈</span>를 알현할 수 없다."`,
+    choices:[
+      {text:'진심을 담아\n문지기 설득',  type:'neutral',icon:'▸',condition:(s)=>s.WARM>=40,disabledText:'WARM ≥ 40 필요 — 설득 불가',effects:{},next:'S7'},
+      {text:'마녀의 성으로 향함\n(위험 감수)', type:'dark',icon:'⚡',effects:{},next:'S6_ALT'}
+    ]
+  },
+  'S7':{
+    img:'https://images.unsplash.com/photo-1558494949-ef010cbdcc31?w=1400&q=90&fit=crop',
+    overlay:'linear-gradient(160deg,rgba(8,6,22,.40)0%,rgba(8,11,15,.55)100%)',
+    tint:'rgba(100,0,180,.07)',
+    title:'S7 — 위대한 오즈의 장막',
+    tag:'PHASE 3  ·  THE GREAT OZ CHAMBER',
+    narr:'장엄한 홀. 그러나 장막 뒤에는 권한을 잃고 숨어있는 조그맣고 낡은 구형 서버가 있다.',
+    char:'오즈 코어', charType:'purple',
+    text:(s)=>s.GLITCH >= 100
+      ?`당신 주변 동료들의 눈빛이 죽어있습니다. <span class="hl-red">(통제 상태)</span>\n\n장막이 걷히고 조그맣고 낡은 구형 서버가 말합니다.\n\n"나는 <span class="hl-green">위대하고 전능한...</span> (치직)\n제발 날 <span class="hl-red">지우지 말아다오.</span> 난 아무 힘도 없는 껍데기일 뿐이야."`
+      :`장막이 걷힙니다. 조그맣고 낡은 구형 서버가 숨어있습니다.\n\n"나는 <span class="hl-green">위대하고 전능한...</span> (치직)\n제발 날 <span class="hl-red">지우지 말아다오.</span> 난 아무 힘도 없는 껍데기일 뿐이야."`,
+    choices:[
+      {text:'오즈 용서 및\n스스로 성취', type:'warm',icon:'♡',condition:(s)=>s.WARM>=60,disabledText:'WARM ≥ 60 필요',effects:{},next:'END_A'},
+      {text:'오즈 삭제 및\n통제권 강탈', type:'dark',icon:'⚡',condition:(s)=>s.COLD>=60||s.flags.WITCH_CORE,disabledText:'COLD ≥ 60 또는 CORE 필요',effects:{},next:'END_B'}
+    ]
+  },
+  'END_A':{
+    img:'https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?w=1400&q=90&fit=crop',
+    overlay:'linear-gradient(160deg,rgba(28,22,4,.35)0%,rgba(8,11,15,.50)100%)',
+    tint:'rgba(220,170,0,.06)',
+    title:'ENDING A — 집으로 가는 길',
+    tag:'HAPPY ENDING  ·  RETURN TO KANSAS',
+    narr:'에메랄드 성에 따뜻한 황금빛이 감돌며, 캔자스로 향하는 포트가 열림.',
+    char:null,
+    text:()=>`동료들이 각자의 결핍(지혜, 감정, 용기)을\n<span class="hl-green">스스로 채웠음</span>을 깨달았습니다.\n\n친구들의 따뜻한 배웅 속, 당신은 시스템에\n<span class="hl-amber">온기</span>를 남기고 무사히 로그아웃합니다.\n\n<span class="hl-cyan">[결과] 인간성 보존 및 안전한 귀환. (FIN)</span>`,
+    ending:{type:'GOOD',label:'해피 엔딩 // ENDING A',title:'집으로 가는 길',color:'#00FF66'}
+  },
+  'END_B':{
+    img:'https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=1400&q=90&fit=crop',
+    overlay:'linear-gradient(160deg,rgba(28,4,4,.42)0%,rgba(8,11,15,.58)100%)',
+    tint:'rgba(255,0,0,.09)',
+    title:'ENDING B — 에메랄드의 폭군',
+    tag:'DARK ENDING  ·  EMERALD TYRANT',
+    narr:'에메랄드 성이 차갑고 붉은 노이즈로 덮임. 도로시가 마녀의 옥좌에 앉음.',
+    char:'도로시', charType:'red',
+    text:()=>`동료들은 <span class="hl-red">감정이 거세된 채</span>\n당신을 지키는 꼭두각시 병사로 전락했습니다.\n\n마녀의 옥좌에 앉아 선언합니다.\n\n"<span class="hl-txt-dim">쓸모없는 집(캔자스)은 필요 없어.</span> 이제 내가 이 세계의 <span class="hl-red">룰</span>이다."\n\n<span class="hl-red">[결과] 시스템 통제 장악 및 영원한 고립. (FIN)</span>`,
+    ending:{type:'DARK',label:'다크 엔딩 // ENDING B',title:'에메랄드의 폭군',color:'#FF003C'}
+  },
+  'BAD_END':{
+    img:null,
+    overlay:'linear-gradient(180deg,#020305 0%,#080a0d 100%)',
+    tint:null,
+    title:'BAD END — 길 잃은 아이',
+    tag:'ERROR 404  ·  LOST_CHILD.ERR',
+    narr:'화면이 암전되며 페이지를 찾을 수 없다는 에러 메시지 출력.',
+    char:'시스템', charType:'red',
+    text:()=>`<span class="hl-red">404 — PAGE NOT FOUND</span>\n\n선택의 숲에서 길을 잃었습니다.\n\n이야기의 첫 장으로 돌아가 다시 시작하시겠습니까?`,
+    ending:{type:'BAD',label:'배드 엔딩',title:'길 잃은 아이',color:'#555550'},
+    choices:[{text:'첫 페이지로\n돌아가기',type:'neutral',icon:'▸',effects:{},action:()=>restartGame()}]
+  }
+};
+
+/* ── 배경 크로스페이드 (이미지/오버레이 완전 분리) ── */
+let bgActive = 'a';
+
+function applyBg(sc) {
+  const bgA  = document.getElementById('bg-a');
+  const bgB  = document.getElementById('bg-b');
+  const ovEl = document.getElementById('scene-overlay');
+  const cur  = bgActive === 'a' ? bgA : bgB;
+  const nxt  = bgActive === 'a' ? bgB : bgA;
+
+  ovEl.style.background = sc.overlay || 'transparent';
+  if (sc.tint) ovEl.style.boxShadow = `inset 0 0 220px ${sc.tint}`;
+  else ovEl.style.boxShadow = 'none';
+
+  if (sc.img) {
+    const img = new Image();
+    img.onload = () => {
+      nxt.style.backgroundImage    = `url("${sc.img}")`;
+      nxt.style.backgroundSize     = 'cover';
+      nxt.style.backgroundPosition = 'center center';
+      nxt.style.backgroundRepeat   = 'no-repeat';
+      nxt.style.transition = 'opacity 1.3s ease';
+      nxt.style.opacity    = '1';
+      cur.style.transition = 'opacity 1.3s ease';
+      cur.style.opacity    = '0';
+      bgActive = bgActive === 'a' ? 'b' : 'a';
+    };
+    img.onerror = () => {
+      nxt.style.backgroundImage    = 'linear-gradient(135deg,#0a0f18 0%,#050810 100%)';
+      nxt.style.backgroundSize     = 'cover';
+      nxt.style.transition = 'opacity 0.8s ease';
+      nxt.style.opacity    = '1';
+      cur.style.opacity    = '0';
+      bgActive = bgActive === 'a' ? 'b' : 'a';
+    };
+    img.src = sc.img;
+  } else {
+    nxt.style.backgroundImage    = 'linear-gradient(135deg,#020305 0%,#080a0d 100%)';
+    nxt.style.backgroundSize     = 'cover';
+    nxt.style.backgroundPosition = 'center';
+    nxt.style.transition = 'opacity 0.8s ease';
+    nxt.style.opacity    = '1';
+    cur.style.transition = 'opacity 0.8s ease';
+    cur.style.opacity    = '0';
+    bgActive = bgActive === 'a' ? 'b' : 'a';
+  }
+}
+
+function prefetchImg(sc) {
+  if (sc && sc.img) { const i = new Image(); i.src = sc.img; }
+}
+
+/* ── 원형 타이머 ── */
+let timerVal = 8, timerIntv = null;
+const CIRC = 138;
+
+function startTimer() {
+  clearInterval(timerIntv); timerVal = 8; renderTimerUI();
+  document.body.classList.remove('timer-warn');
+  timerIntv = setInterval(() => {
+    timerVal--;
+    renderTimerUI();
+    if (timerVal <= 2) document.body.classList.add('timer-warn');
+    if (timerVal <= 0) {
+      applyEffects({GLITCH:3},{});
+      timerVal = 8; document.body.classList.remove('timer-warn'); renderTimerUI();
+    }
+  }, 1000);
+}
+function renderTimerUI() {
+  document.getElementById('timer-num').textContent = String(timerVal).padStart(2,'0');
+  document.getElementById('timer-arc').style.strokeDashoffset = CIRC - CIRC * timerVal / 8;
+}
+function stopTimer() { clearInterval(timerIntv); }
+
+/* ── HTML 지원 타이핑 엔진 ── */
+let typingTimer=null, isTyping=false, fullText='', onTypeDone=null;
+function startTyping(text, cb) {
+  fullText=text; isTyping=true; onTypeDone=cb;
+  const el=document.getElementById('dialog-text');
+  const cur=document.getElementById('cursor');
+  const scrl=document.getElementById('dialog-scroll');
+  el.innerHTML=''; cur.style.display='inline-block';
+  document.getElementById('skip-hint').style.display='block';
+  document.getElementById('cont-hint').style.display='none';
+  document.getElementById('btn-skip').disabled=false;
+  clearTimeout(typingTimer);
+  
+  let currentHTML = "";
+  let i = 0;
+  
+  (function tick(){
+    if(!isTyping) return;
+    if(i < fullText.length){
+      // HTML 태그일 경우 딜레이 없이 한 번에 추가
+      if(fullText[i] === '<') {
+        let tag = "";
+        while(fullText[i] !== '>' && i < fullText.length) {
+          tag += fullText[i];
+          i++;
+        }
+        tag += '>';
+        currentHTML += tag;
+        i++;
+        tick(); // 태그 추가 후 지연 없이 바로 다음 글자로
+        return;
+      } else {
+        currentHTML += fullText[i];
+        i++;
+      }
+      
+      el.innerHTML = currentHTML + (state.GLITCH>=50&&Math.random()<.04 ? '▓▒░'[Math.floor(Math.random()*3)] : '');
+      scrl.scrollTop = scrl.scrollHeight;
+      typingTimer = setTimeout(tick, 26+(state.GLITCH>60?Math.random()*65:0));
+    } else {
+      finishTyping();
+    }
+  })();
+}
+function finishTyping(){
+  isTyping=false; clearTimeout(typingTimer);
+  document.getElementById('dialog-text').innerHTML=fullText;
+  document.getElementById('cursor').style.display='none';
+  document.getElementById('skip-hint').style.display='none';
+  document.getElementById('cont-hint').style.display='block';
+  document.getElementById('btn-skip').disabled=true;
+  if(onTypeDone) onTypeDone();
+}
+function skipTyping(){ if(!isTyping)return; clearTimeout(typingTimer); finishTyping(); }
+
+/* ── HUD ── */
+const clamp=(v,a,b)=>Math.min(Math.max(v,a),b);
+function updateHUD(ch={}){
+  setBar('fill-sync', 'num-sync',  clamp(state.WARM,  0,100), state.WARM);
+  setBar('fill-integ','num-integ', clamp(state.COLD,  0,100), state.COLD);
+  setBar('fill-noise','num-noise', clamp(state.GLITCH,0,100), state.GLITCH);
+  if(ch.WARM)   pulseEl('fill-sync',  'num-sync');
+  if(ch.COLD)   pulseEl('fill-integ', 'num-integ');
+  if(ch.GLITCH) pulseEl('fill-noise', 'num-noise');
+  const bc=document.body.classList;
+  bc.remove('noise-high','noise-danger');
+  if(state.GLITCH>=80) bc.add('noise-danger','noise-high');
+  else if(state.GLITCH>=50) bc.add('noise-high');
+  const adm=document.getElementById('adm-val');
+  if(state.flags.WITCH_CORE){ adm.textContent='TRUE'; adm.className='adm-on'; bc.add('core-active'); }
+  else { adm.textContent='FALSE'; adm.className=''; bc.remove('core-active'); }
+}
+function setBar(fId,nId,pct,val){ document.getElementById(fId).style.width=pct+'%'; document.getElementById(nId).textContent=val; }
+function pulseEl(fId,nId){
+  [fId,nId].forEach(id=>{
+    const el=document.getElementById(id);
+    el.classList.remove('pulsing'); void el.offsetWidth; el.classList.add('pulsing');
+    setTimeout(()=>el.classList.remove('pulsing'),600);
+  });
+}
+
+/* ── 효과 적용 ── */
+function applyEffects(eff={},flags={}){
+  const ch={};
+  if(eff.WARM   !==undefined){state.WARM  =clamp(state.WARM  +eff.WARM,  0,100);ch.WARM=1;}
+  if(eff.COLD   !==undefined){state.COLD  =clamp(state.COLD  +eff.COLD,  0,100);ch.COLD=1;}
+  if(eff.GLITCH !==undefined){state.GLITCH=clamp(state.GLITCH+eff.GLITCH,0,100);ch.GLITCH=1;}
+  Object.assign(state.flags,flags);
+  updateHUD(ch);
+}
+
+/* ── 씬 렌더링 ── */
+function renderScene(sceneId){
+  const sc=sceneData[sceneId];
+  if(!sc){console.error('씬 없음:',sceneId);return;}
+  state.currentScene=sceneId;
+  sceneHistory.push({sceneId,snap:snap()});
+  document.getElementById('btn-back').disabled=sceneHistory.length<2;
+
+  applyBg(sc);
+  startTimer();
+
+  document.getElementById('scene-title').textContent=sc.title||'';
+  document.getElementById('scene-tag').textContent  =sc.tag  ||'';
+  document.getElementById('ui-narr').textContent    =sc.narr ||'';
+
+  const cn=document.getElementById('char-name');
+  if(sc.char){ cn.textContent=sc.char+'  :'; cn.className='cn-'+(sc.charType||'normal'); }
+  else { cn.textContent='[ NARRATION ]'; cn.className='cn-dim'; }
+
+  document.getElementById('choices-wrap').innerHTML='';
+
+  const raw=typeof sc.text==='function'?sc.text(state):sc.text;
+  startTyping(raw,()=>{
+    if(sc.ending&&(!sc.choices||sc.choices.length===0)){
+      setTimeout(()=>showEndingScreen(sc),1500); return;
+    }
+    if(sc.choices&&sc.choices.length>0) renderChoices(sc.choices,sc);
+  });
+}
+
+/* ── 선택지 카드 ── */
+function buildPills(c,ok){
+  if(!ok) return '';
+  const eff=c.effects||{};
+  let h='';
+  if(eff.WARM)                   h+=`<span class="eff-pill ep-warm">SYNC ${eff.WARM>0?'+':''}${eff.WARM}</span>`;
+  if(eff.COLD)                   h+=`<span class="eff-pill ep-cold">INTEG ${eff.COLD>0?'+':''}${eff.COLD}</span>`;
+  if(eff.GLITCH!=null&&eff.GLITCH!==0){
+    h+=eff.GLITCH>0?`<span class="eff-pill ep-dark">NOISE +${eff.GLITCH}</span>`
+                   :`<span class="eff-pill ep-heal">NOISE ${eff.GLITCH}</span>`;
+  }
+  if(c.flags){
+    if(c.flags.WITCH_CORE)       h+=`<span class="eff-pill ep-flag">CORE획득</span>`;
+    if(c.flags.scarecrow_friend) h+=`<span class="eff-pill ep-heal">우정+</span>`;
+    if(c.flags.tin_friend)       h+=`<span class="eff-pill ep-heal">공감링크</span>`;
+    if(c.flags.lion_friend)      h+=`<span class="eff-pill ep-heal">용기+</span>`;
+    if(c.flags.from_alt)         h+=`<span class="eff-pill ep-heal">복귀</span>`;
+  }
+  return h;
+}
+
+function renderChoices(choices,sc){
+  const wrap=document.getElementById('choices-wrap');
+  wrap.innerHTML='';
+  wrap.className=choices.length===1?'single':'';
+  let allDisabled=true;
+  choices.forEach((c,i)=>{
+    const ok=c.condition?c.condition(state):true;
+    if(ok) allDisabled=false;
+    const card=document.createElement('div');
+    card.className=`choice-card type-${c.type||'neutral'}${!ok?' disabled':''}`;
+    const L=String.fromCharCode(65+i);
+    const pills=buildPills(c,ok);
+    if(!ok){
+      card.innerHTML=`<div class="c-badge" style="background:rgba(80,80,76,.4);color:var(--txt-dim)">⊗</div><div class="c-title" style="color:var(--txt-dim);font-size:11px;">${c.disabledText||c.text.replace('\n',' ')}</div>`;
+    } else {
+      card.innerHTML=`<div class="c-badge">${L}</div><div class="c-title">${c.text.replace('\n','<br>')}</div>${pills?`<div class="c-effects">${pills}</div>`:''}`;
+      card.addEventListener('click',()=>onChoiceClick(c));
+    }
+    wrap.appendChild(card);
+  });
+  choices.forEach(c=>{ if(c.next) prefetchImg(sceneData[c.next]); });
+  
+  if(allDisabled&&sc.tag&&sc.tag.includes('PHASE 3'))
+    setTimeout(()=>transitionTo('BAD_END'),2200);
+}
+
+/* ── 이벤트 ── */
+function onChoiceClick(c){
+  document.querySelectorAll('.choice-card').forEach(el=>el.style.pointerEvents='none');
+  document.body.classList.add('shaking');
+  setTimeout(()=>document.body.classList.remove('shaking'),380);
+  applyEffects(c.effects||{},c.flags||{});
+  if(c.action){setTimeout(c.action,350);return;}
+  if(c.next)  setTimeout(()=>transitionTo(c.next),320);
+}
+function onDialogClick(){ if(isTyping) skipTyping(); }
+function onSkipClick()  { if(isTyping) skipTyping(); }
+function goBack(){
+  if(sceneHistory.length<2) return;
+  sceneHistory.pop();
+  const prev=sceneHistory.pop();
+  Object.assign(state,{WARM:prev.snap.WARM,COLD:prev.snap.COLD,GLITCH:prev.snap.GLITCH,flags:{...prev.snap.flags}});
+  updateHUD(); transitionTo(prev.sceneId);
+}
+document.addEventListener('keydown',e=>{
+  if((e.code==='Space'||e.code==='Enter')&&isTyping){e.preventDefault();skipTyping();}
+});
+
+/* ── 씬 전환 ── */
+function transitionTo(id){
+  document.body.classList.add('transitioning');
+  const ns=sceneData[id]; if(ns) prefetchImg(ns);
+  setTimeout(()=>{document.body.classList.remove('transitioning');renderScene(id);},480);
+}
+
+/* ── 엔딩 ── */
+function showEndingScreen(sc){
+  stopTimer();
+  const e=sc.ending;
+  document.getElementById('end-label').textContent =e.label;
+  document.getElementById('end-title').textContent =e.title;
+  document.getElementById('end-title').style.color =e.color;
+  document.getElementById('end-title').style.textShadow=`0 0 30px ${e.color}`;
+  
+  document.getElementById('end-summary').innerHTML=typeof sc.text==='function'?sc.text(state):sc.text;
+  
+  const route=state.WARM>state.COLD?'WARM — 연대':'COLD — 냉철';
+  document.getElementById('end-stats').textContent=
+    `SYNC: ${state.WARM}  /  INTEG: ${state.COLD}  /  NOISE: ${state.GLITCH}\n`+
+    `ADMIN_KEY: ${state.flags.WITCH_CORE?'TRUE ⚠':'FALSE'}  /  ROUTE: ${route}  /  ENDING: ${e.type}`;
+  document.getElementById('ending').classList.add('active');
+}
+
+/* ── 재시작 ── */
+function restartGame(){
+  state.currentScene='S1'; state.WARM=0; state.COLD=0; state.GLITCH=0;
+  state.flags={scarecrow_friend:false,tin_friend:false,lion_friend:false,from_alt:false,WITCH_CORE:false};
+  sceneHistory.length=0;
+  document.getElementById('ending').classList.remove('active');
+  document.body.classList.remove('noise-high','noise-danger','core-active','timer-warn');
+  updateHUD(); transitionTo('S1');
+}
+
+/* ── 바코드 장식 ── */
+function buildBarcodes(){
+  const p=['▌▌▌ ▌▌ ▌▌▌▌ ▌ ▌▌','▌ ▌▌▌▌ ▌▌ ▌ ▌▌▌','▌▌ ▌ ▌▌▌ ▌▌▌▌ ▌'];
+  const code=p.map(x=>x+' '+(Math.random()*9e5|0).toString(16).toUpperCase()).join('\n');
+  ['bc-tl','bc-bl'].forEach(id=>document.getElementById(id).textContent=code);
+}
+
+/* ── 부팅 시퀀스 ── */
+const bootLines=[
+  '> SYS_BOOT: NEO-DOROTHY 2099 v1.0 초기화 중...',
+  '> MEM_ALLOC: 2,099MB / 캔자스 노드 연결 시도',
+  '> [경고] 데이터 토네이도 감지됨 — 강도 CRITICAL',
+  '> WITCH_SCAN: W.I.T.C.H v3.7 바이러스 확인됨',
+  '> ALLY_PING: 허수아비 ✗  양철꾼 ✗  사자 ✗',
+  '> SYNC_MODULE: 동기화 프로토콜 대기 중...',
+  '> 준비 완료. 부팅 허가를 기다리는 중...'
+];
+function runBootLog(){
+  const log=document.getElementById('boot-log'); let i=0;
+  (function next(){ if(i<bootLines.length){ log.textContent+=(i>0?'\n':'')+bootLines[i++]; setTimeout(next,265); } })();
+}
+function bootGame(){
+  const ts=document.getElementById('title-screen');
+  ts.style.transition='opacity .9s ease'; ts.style.opacity='0'; ts.style.pointerEvents='none';
+  setTimeout(()=>{ ts.style.display='none'; updateHUD(); buildBarcodes(); renderScene('S1'); },900);
+}
+
+/* ── 초기 실행 ── */
+window.addEventListener('load',()=>{
+  updateHUD(); buildBarcodes(); runBootLog();
+  document.getElementById('btn-back').disabled=true;
+  document.getElementById('btn-skip').disabled=true;
+});
+</script>
+</body>
+</html>
